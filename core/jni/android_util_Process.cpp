@@ -184,6 +184,13 @@ void android_os_Process_setThreadGroup(JNIEnv* env, jobject clazz, int tid, jint
     if (res != NO_ERROR) {
         signalExceptionForGroupError(env, -res, tid);
     }
+
+    if ((grp == SP_AUDIO_APP) || (grp == SP_AUDIO_SYS)) {
+        res = set_cpuset_policy(tid, sp);
+        if (res != NO_ERROR) {
+            signalExceptionForGroupError(env, -res, tid);
+        }
+    }
 }
 
 void android_os_Process_setThreadGroupAndCpuset(JNIEnv* env, jobject clazz, int tid, jint grp)
@@ -366,8 +373,21 @@ static void get_cpuset_cores_for_policy(SchedPolicy policy, cpu_set_t *cpu_set)
             }
             break;
         case SP_FOREGROUND:
+            if (!CgroupGetAttributePath("HighCapacityCPUs", &filename)) {
+                return;
+            }
+            break;
         case SP_AUDIO_APP:
         case SP_AUDIO_SYS:
+            if (!CgroupGetAttributePath("AudioAppCapacityCPUs", &filename)) {
+                return;
+            }
+            if (access(filename.c_str(), F_OK) != 0) {
+                if (!CgroupGetAttributePath("HighCapacityCPUs", &filename)) {
+                    return;
+                }
+            }
+            break;
         case SP_RT_APP:
             if (!CgroupGetAttributePath("HighCapacityCPUs", &filename)) {
                 return;
