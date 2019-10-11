@@ -4271,4 +4271,9 @@
     <!-- Boolean indicating whether frameworks needs to reset cell broadcast geo-fencing
          check after reboot or airplane mode toggling -->
     <bool translatable="false" name="reset_geo_fencing_check_after_boot_or_apm">false</bool>
+
+    <!-- Default number of max cached processes -->
+    <integer name="config_defaultMaxCachedProcesses">128</integer>
+    <!-- Default number of processes before start trimming. 0 = calc from config_defaultMaxCachedProcesses -->
+    <integer name="config_defaultTrimCachedProcesses">0</integer>
 </resources>
