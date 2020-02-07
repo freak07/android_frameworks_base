@@ -31,6 +31,11 @@ import android.util.TypedValue;
 import android.view.View;
 import android.widget.TextView;
 
+import com.android.internal.util.du.Utils;
+
+import com.android.systemui.Dependency;
+import com.android.systemui.plugins.DarkIconDispatcher;
+import com.android.systemui.plugins.DarkIconDispatcher.DarkReceiver;
 import com.android.systemui.R;
 
 /*
@@ -39,7 +44,7 @@ import com.android.systemui.R;
 * to only use it for a single boolean. 32-bits is plenty of room for what we need it to do.
 *
 */
-public class NetworkTraffic extends TextView {
+public class NetworkTrafficSB extends TextView  implements DarkReceiver {
 
     private static final int INTERVAL = 1500; //ms
     private static final int KB = 1024;
@@ -54,6 +59,8 @@ public class NetworkTraffic extends TextView {
     private long lastUpdateTime;
     private int mAutoHideThreshold;
     private int mTintColor;
+
+    private boolean mScreenOn = true;
 
     private Handler mTrafficHandler = new Handler() {
         @Override
@@ -87,10 +94,10 @@ public class NetworkTraffic extends TextView {
 
                 // Update view if there's anything new to show
                 if (output != getText()) {
-                    setTypeface(Typeface.create("sans-serif-condensed", Typeface.NORMAL));
+                    setTypeface(Typeface.create("sans-serif-condensed", Typeface.BOLD));
                     setGravity(Gravity.CENTER);
                     setMaxLines(2);
-                    setLineSpacing(0.90f, 0.90f);
+                    setLineSpacing(0.75f, 0.75f);
                     setText(output);
                 }
             } else {
@@ -99,13 +106,13 @@ public class NetworkTraffic extends TextView {
 
                 // Update view if there's anything new to show
                 if (output != getText()) {
-                    setTypeface(Typeface.create("sans-serif-condensed", Typeface.NORMAL));
+                    setTypeface(Typeface.create("sans-serif-condensed", Typeface.BOLD));
                     setGravity(Gravity.CENTER);
                     setMaxLines(2);
-                    setLineSpacing(0.90f, 0.90f);
+                    setLineSpacing(0.75f, 0.75f);
                     setText(output);
                 }
-                setVisibility(View.VISIBLE);
+                setVisibility(Utils.hasNotch(mContext) ? View.GONE : View.VISIBLE);
             }
 
             // Post delayed message to refresh in ~1000ms
@@ -158,10 +165,10 @@ public class NetworkTraffic extends TextView {
                 formatSpeed = mDecimalFormat.format(speed / (float)KB);
             }
             spanSpeedString = new SpannableString(formatSpeed);
-            spanSpeedString.setSpan(new RelativeSizeSpan(0.90f), 0, (formatSpeed).length(), Spanned.SPAN_INCLUSIVE_INCLUSIVE);
+            spanSpeedString.setSpan(new RelativeSizeSpan(0.75f), 0, (formatSpeed).length(), Spanned.SPAN_INCLUSIVE_INCLUSIVE);
 
             spanUnitString = new SpannableString(mUnit + symbol);
-            spanUnitString.setSpan(new RelativeSizeSpan(0.80f), 0, (mUnit + symbol).length(), Spanned.SPAN_INCLUSIVE_INCLUSIVE);
+            spanUnitString.setSpan(new RelativeSizeSpan(0.70f), 0, (mUnit + symbol).length(), Spanned.SPAN_INCLUSIVE_INCLUSIVE);
             return TextUtils.concat(spanSpeedString, "\n", spanUnitString);
         }
 
@@ -216,21 +223,21 @@ public class NetworkTraffic extends TextView {
     /*
      *  @hide
      */
-    public NetworkTraffic(Context context) {
+    public NetworkTrafficSB(Context context) {
         this(context, null);
     }
 
     /*
      *  @hide
      */
-    public NetworkTraffic(Context context, AttributeSet attrs) {
+    public NetworkTrafficSB(Context context, AttributeSet attrs) {
         this(context, attrs, 0);
     }
 
     /*
      *  @hide
      */
-    public NetworkTraffic(Context context, AttributeSet attrs, int defStyle) {
+    public NetworkTrafficSB(Context context, AttributeSet attrs, int defStyle) {
         super(context, attrs, defStyle);
         final Resources resources = getResources();
         mTintColor = resources.getColor(android.R.color.white);
@@ -252,6 +259,7 @@ public class NetworkTraffic extends TextView {
             filter.addAction(Intent.ACTION_SCREEN_ON);
             mContext.registerReceiver(mIntentReceiver, filter, null, getHandler());
         }
+        Dependency.get(DarkIconDispatcher.class).addDarkReceiver(this);
         updateSettings();
     }
 
@@ -262,16 +270,22 @@ public class NetworkTraffic extends TextView {
             mContext.unregisterReceiver(mIntentReceiver);
             mAttached = false;
         }
+        Dependency.get(DarkIconDispatcher.class).removeDarkReceiver(this);
     }
 
     private final BroadcastReceiver mIntentReceiver = new BroadcastReceiver() {
         @Override
         public void onReceive(Context context, Intent intent) {
             String action = intent.getAction();
-            if (action != null && action.equals(ConnectivityManager.CONNECTIVITY_ACTION)
-                    || action.equals(Intent.ACTION_SCREEN_ON)) {
+            if (action == null) return;
+
+            if (action.equals(ConnectivityManager.CONNECTIVITY_ACTION) && mScreenOn) {
                 updateSettings();
-            } else if (action != null && action.equals(Intent.ACTION_SCREEN_OFF)) {
+            } else if (action.equals(Intent.ACTION_SCREEN_ON)) {
+                mScreenOn = true;
+                updateSettings();
+            } else if (action.equals(Intent.ACTION_SCREEN_OFF)) {
+                mScreenOn = false;
                 clearHandlerCallbacks();
             }
         }
@@ -305,7 +319,7 @@ public class NetworkTraffic extends TextView {
                 Settings.System.NETWORK_TRAFFIC_STATE, 0,
                 UserHandle.USER_CURRENT) == 1;
         mAutoHideThreshold = Settings.System.getIntForUser(resolver,
-                Settings.System.NETWORK_TRAFFIC_AUTOHIDE_THRESHOLD, 1,
+                Settings.System.NETWORK_TRAFFIC_AUTOHIDE_THRESHOLD, 0,
                 UserHandle.USER_CURRENT);
     }
 
@@ -325,9 +339,16 @@ public class NetworkTraffic extends TextView {
 
     public void onDensityOrFontScaleChanged() {
         final Resources resources = getResources();
-        setTypeface(Typeface.create("sans-serif-condensed", Typeface.NORMAL));
+        setTypeface(Typeface.create("sans-serif-condensed", Typeface.BOLD));
         setGravity(Gravity.CENTER);
         setMaxLines(2);
-        setLineSpacing(0.90f, 0.90f);
+        setLineSpacing(0.75f, 0.75f);
+    }
+
+    @Override
+    public void onDarkChanged(Rect area, float darkIntensity, int tint) {
+        mTintColor = DarkIconDispatcher.getTint(area, this, tint);
+        setTextColor(mTintColor);
+        updateTrafficDrawable();
     }
 }
